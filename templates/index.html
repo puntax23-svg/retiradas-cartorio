@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <title>
+        23º Tabelião - Retiradas
+    </title>
+
+    <style>
+
+        body{
+            font-family: Arial;
+            background: #f4f4f4;
+            padding: 40px;
+        }
+
+        .container{
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            max-width: 700px;
+            margin: auto;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+
+        h1{
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        input{
+            width: 100%;
+            padding: 12px;
+            margin-top: 10px;
+            margin-bottom: 20px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            box-sizing: border-box;
+        }
+
+        button{
+            width: 100%;
+            padding: 15px;
+            background: #1d4ed8;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+
+        button:hover{
+            background: #2563eb;
+        }
+
+    </style>
+
+</head>
+
+<body>
+
+    <div class="container">
+
+        <h1>
+            23º TABELIÃO - RETIRADAS
+        </h1>
+
+        <form
+            action="/salvar"
+            method="POST"
+            enctype="multipart/form-data"
+        >
+
+            <input
+                type="text"
+                name="destinatario"
+                placeholder="Destinatário"
+            >
+
+            <input
+                type="text"
+                name="tipo_ato"
+                placeholder="Tipo do ato"
+            >
+
+            <input
+                type="text"
+                name="retirado_por"
+                placeholder="Retirado por"
+            >
+
+            <input
+                type="text"
+                name="data_retirada"
+                placeholder="Data retirada"
+            >
+
+            <input
+                type="text"
+                name="escrevente"
+                placeholder="Escrevente"
+            >
+
+            <input
+                type="file"
+                name="pdf"
+            >
+
+            <button type="submit">
+                Salvar Retirada
+            </button>
+
+        </form>
+
+    </div>
+
+</body>
+
+</html>
