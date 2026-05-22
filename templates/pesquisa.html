@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <title>Pesquisa</title>
+
+    <style>
+
+        body{
+            font-family: Arial;
+            background: #f4f4f4;
+            padding: 40px;
+        }
+
+        .container{
+            max-width: 1000px;
+            margin: auto;
+        }
+
+        .card{
+            background: white;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 5px rgba(0,0,0,0.1);
+        }
+
+        input{
+            width: 80%;
+            padding: 12px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+
+        button{
+            padding: 12px 20px;
+            background: #1d4ed8;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        a{
+            display: inline-block;
+            margin-top: 10px;
+            text-decoration: none;
+            color: #1d4ed8;
+            font-weight: bold;
+        }
+
+    </style>
+
+</head>
+
+<body>
+
+    <div class="container">
+
+        <h1>
+            PESQUISA DE RETIRADAS
+        </h1>
+
+        <form method="GET">
+
+            <input
+                type="text"
+                name="termo"
+                placeholder="Pesquisar destinatário"
+            >
+
+            <button type="submit">
+                Pesquisar
+            </button>
+
+        </form>
+
+        <br><br>
+
+        {% for r in retiradas %}
+
+        <div class="card">
+
+            <b>PROTOCOLO:</b>
+            {{ r[0] }}
+            <br><br>
+
+            <b>DESTINATÁRIO:</b>
+            {{ r[1] }}
+            <br><br>
+
+            <b>ATO:</b>
+            {{ r[2] }}
+            <br><br>
+
+            <b>RETIRADO POR:</b>
+            {{ r[3] }}
+            <br><br>
+
+            <b>DATA:</b>
+            {{ r[4] }}
+            <br><br>
+
+            <b>ESCREVENTE:</b>
+            {{ r[5] }}
+            <br><br>
+
+            <a href="/pdf/{{ r[6] }}" target="_blank">
+                ABRIR PDF
+            </a>
+
+        </div>
+
+        {% endfor %}
+
+    </div>
+
+</body>
+
+</html>
