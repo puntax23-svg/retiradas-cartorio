@@ -1,237 +1,144 @@
-from flask import Flask, render_template, request, redirect
-import sqlite3
-import os
-import fitz
-import pytesseract
-from PIL import Image
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
 
-app = Flask(__name__)
+<meta charset="UTF-8">
 
-UPLOAD_FOLDER = "uploads"
+<title>Fabio Contreras - Retiradas</title>
 
-if not os.path.exists(UPLOAD_FOLDER):
-    os.makedirs(UPLOAD_FOLDER)
+<style>
 
-# =========================
-# CRIAR BANCO
-# =========================
+body{
+    font-family: Arial;
+    background:#f4f4f4;
+}
 
-conn = sqlite3.connect("banco.db")
-cursor = conn.cursor()
+.container{
+    width:700px;
+    margin:auto;
+    margin-top:40px;
+    background:white;
+    padding:30px;
+    border-radius:10px;
+}
 
-cursor.execute("""
-CREATE TABLE IF NOT EXISTS retiradas (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    nome TEXT,
-    ato TEXT,
-    retirado_por TEXT,
-    data_retirada TEXT,
-    escrevente TEXT,
-    arquivo TEXT,
-    ocr TEXT
-)
-""")
+h1{
+    text-align:center;
+    margin-bottom:40px;
+}
 
-conn.commit()
-conn.close()
+input{
+    width:100%;
+    padding:15px;
+    margin-bottom:20px;
+    border:1px solid #ccc;
+    border-radius:5px;
+    box-sizing:border-box;
+}
 
-# =========================
-# OCR PDF
-# =========================
+button{
+    width:100%;
+    padding:15px;
+    background:#2952d1;
+    color:white;
+    border:none;
+    border-radius:5px;
+    font-size:18px;
+    cursor:pointer;
+}
 
-def ler_pdf_ocr(caminho):
+button:hover{
+    background:#1d3ea3;
+}
 
-    texto_total = ""
+</style>
 
-    pdf = fitz.open(caminho)
+</head>
 
-    for pagina in pdf:
+<body>
 
-        pix = pagina.get_pixmap()
+<div class="container">
 
-        imagem_path = "temp.png"
+<h1>FABIO CONTRERAS - RETIRADAS</h1>
 
-        pix.save(imagem_path)
-
-        texto = pytesseract.image_to_string(Image.open(imagem_path))
-
-        texto_total += texto
-
-    return texto_total
-
-# =========================
-# HOME
-# =========================
-
-@app.route("/")
-def home():
-    return render_template("index.html")
-
-# =========================
-# SALVAR
-# =========================
-
-@app.route("/salvar", methods=["POST"])
-def salvar():
-
-    nome = request.form.get("nome")
-    ato = request.form.get("ato")
-    retirado_por = request.form.get("retirado_por")
-    data_retirada = request.form.get("data_retirada")
-    escrevente = request.form.get("escrevente")
-
-    arquivo = request.files["arquivo"]
-
-    nome_arquivo = arquivo.filename
-
-    caminho = os.path.join(UPLOAD_FOLDER, nome_arquivo)
-
-    arquivo.save(caminho)
-
-    texto_ocr = ler_pdf_ocr(caminho)
-
-    conn = sqlite3.connect("banco.db")
-    cursor = conn.cursor()
-
-    cursor.execute("""
-    INSERT INTO retiradas (
-        nome,
-        ato,
-        retirado_por,
-        data_retirada,
-        escrevente,
-        arquivo,
-        ocr
-    )
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-    """, (
-        nome,
-        ato,
-        retirado_por,
-        data_retirada,
-        escrevente,
-        nome_arquivo,
-        texto_ocr
-    ))
-
-    conn.commit()
-    conn.close()
-
-    return redirect("/pesquisa")
-
-# =========================
-# PESQUISA
-# =========================
-
-@app.route("/pesquisa")
-def pesquisa():
-
-    termo = request.args.get("termo", "")
-
-    resultados = []
-
-    if termo != "":
-
-        conn = sqlite3.connect("banco.db")
-        cursor = conn.cursor()
-
-        cursor.execute("""
-        SELECT nome, arquivo
-        FROM retiradas
-        WHERE nome LIKE ?
-        """, ('%' + termo + '%',))
-
-        resultados = cursor.fetchall()
-
-        conn.close()
-
-    html = """
-    <html>
-    <head>
-    <title>Pesquisa</title>
-
-    <style>
-
-    body{
-        font-family: Arial;
-        background:#f4f4f4;
-    }
-
-    .container{
-        width:800px;
-        margin:auto;
-        margin-top:50px;
-    }
-
-    input{
-        width:80%;
-        padding:15px;
-    }
-
-    button{
-        padding:15px;
-    }
-
-    .item{
-        background:white;
-        padding:20px;
-        margin-top:20px;
-        border-radius:10px;
-    }
-
-    </style>
-
-    </head>
-    <body>
-
-    <div class='container'>
-
-    <h1>PESQUISA DE RETIRADAS</h1>
-
-    <form>
+<form id="formulario" enctype="multipart/form-data">
 
     <input
-        type='text'
-        name='termo'
-        placeholder='Pesquisar destinatário'
+        type="text"
+        name="nome"
+        placeholder="Destinatário"
+        required
     >
 
-    <button type='submit'>
-        Pesquisar
+    <input
+        type="text"
+        name="ato"
+        placeholder="Tipo do ato"
+    >
+
+    <input
+        type="text"
+        name="retirado_por"
+        placeholder="Retirado por"
+    >
+
+    <input
+        type="text"
+        name="data_retirada"
+        placeholder="Data retirada"
+    >
+
+    <input
+        type="text"
+        name="escrevente"
+        placeholder="Escrevente"
+    >
+
+    <input
+        type="file"
+        name="arquivo"
+        required
+    >
+
+    <button type="submit">
+        Salvar Retirada
     </button>
 
-    </form>
-    """
+</form>
 
-    for r in resultados:
+</div>
 
-        html += f"""
-        <div class='item'>
-            <b>{r[0]}</b><br><br>
+<script>
 
-            <a href='/uploads/{r[1]}' target='_blank'>
-                Abrir PDF
-            </a>
-        </div>
-        """
+document
+.getElementById("formulario")
+.addEventListener("submit", function(e){
 
-    html += "</div></body></html>"
+    e.preventDefault();
 
-    return html
+    const formData = new FormData(this);
 
-# =========================
-# SERVIR UPLOADS
-# =========================
+    fetch("/salvar", {
+        method: "POST",
+        body: formData
+    })
+    .then(response => {
 
-from flask import send_from_directory
+        if(response.redirected){
+            window.location.href = response.url;
+        }else{
+            alert("Erro ao salvar");
+        }
 
-@app.route('/uploads/<path:nome>')
-def uploads(nome):
-    return send_from_directory(UPLOAD_FOLDER, nome)
+    })
+    .catch(error => {
+        alert("Erro no envio");
+        console.log(error);
+    });
 
-# =========================
-# START
-# =========================
+});
 
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=10000)
+</script>
+
+</body>
+</html>
