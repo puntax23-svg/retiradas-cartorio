@@ -1,317 +1,218 @@
-from flask import (
-    Flask,
-    render_template,
-    request,
-    redirect,
-    send_from_directory
-)
-
+from flask import Flask, render_template, request, redirect, send_from_directory
 import sqlite3
 import os
-
-from datetime import datetime
-
-# OCR
+from werkzeug.utils import secure_filename
 import fitz
 import pytesseract
-
 from PIL import Image
 
 app = Flask(__name__)
 
-# =====================================
-# PASTA DE UPLOADS
-# =====================================
-
 UPLOAD_FOLDER = "uploads"
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-if not os.path.exists(UPLOAD_FOLDER):
-    os.makedirs(UPLOAD_FOLDER)
+DB = "banco.db"
 
-# =====================================
+
+# =========================
 # CRIAR BANCO
-# =====================================
+# =========================
 
-conn = sqlite3.connect("banco.db")
-cursor = conn.cursor()
+def criar_banco():
+    conn = sqlite3.connect(DB)
+    cursor = conn.cursor()
 
-cursor.execute("""
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS retiradas (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        nome TEXT,
+        ato TEXT,
+        retirado_por TEXT,
+        data_retirada TEXT,
+        escrevente TEXT,
+        arquivo TEXT
+    )
+    """)
 
-CREATE TABLE IF NOT EXISTS retiradas (
+    conn.commit()
+    conn.close()
 
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
 
-    destinatario TEXT,
+criar_banco()
 
-    tipo_ato TEXT,
 
-    retirado_por TEXT,
-
-    data_retirada TEXT,
-
-    escrevente TEXT,
-
-    pdf TEXT
-
-)
-
-""")
-
-conn.commit()
-conn.close()
-
-# =====================================
+# =========================
 # OCR PDF
-# =====================================
+# =========================
 
 def ler_pdf_ocr(caminho_pdf):
-
     texto_total = ""
 
     pdf = fitz.open(caminho_pdf)
 
-    for numero_pagina, pagina in enumerate(pdf):
+    for pagina in pdf:
+        pix = pagina.get_pixmap()
 
-        pix = pagina.get_pixmap(matrix=fitz.Matrix(2, 2))
+        img_path = "pagina.png"
+        pix.save(img_path)
 
-        imagem_path = f"pagina_{numero_pagina}.png"
-
-        pix.save(imagem_path)
-
-        imagem = Image.open(imagem_path)
+        imagem = Image.open(img_path)
 
         texto = pytesseract.image_to_string(
             imagem,
             lang="por"
         )
 
-        texto_total += texto
-
-        os.remove(imagem_path)
+        texto_total += texto + "\n"
 
     return texto_total
 
-# =====================================
-# EXTRAIR DADOS OCR
-# =====================================
+
+# =========================
+# EXTRAIR DADOS
+# =========================
 
 def extrair_dados(texto):
-
-    destinatario = ""
-    tipo_ato = ""
-    escrevente = ""
-
     linhas = texto.split("\n")
+
+    nome = ""
+    ato = ""
 
     for linha in linhas:
 
-        linha_limpa = linha.strip()
+        linha = linha.strip()
 
-        linha_upper = linha_limpa.upper()
+        if len(linha) > 10 and nome == "":
+            nome = linha.upper()
 
-        # =================================
-        # DESTINATÁRIO
-        # =================================
+        if "ESCRITURA" in linha.upper():
+            ato = linha
 
-        if "DESTINAT" in linha_upper:
+        elif "PROCURAÇÃO" in linha.upper():
+            ato = linha
 
-            if ":" in linha_limpa:
+        elif "ATA" in linha.upper():
+            ato = linha
 
-                partes = linha_limpa.split(":")
+        elif "RECONHECIMENTO" in linha.upper():
+            ato = linha
 
-                if len(partes) > 1:
+    return nome, ato
 
-                    destinatario = partes[1].strip()
 
-        # =================================
-        # TIPO DO ATO
-        # =================================
-
-        if "ESCRITURA" in linha_upper:
-
-            tipo_ato = linha_limpa
-
-        # =================================
-        # ESCREVENTE
-        # =================================
-
-        if "ESCREVENTE" in linha_upper:
-
-            if ":" in linha_limpa:
-
-                partes = linha_limpa.split(":")
-
-                if len(partes) > 1:
-
-                    escrevente = partes[1].strip()
-
-    print("\n=========== TEXTO OCR ===========\n")
-
-    print(texto)
-
-    print("\n=========== DADOS EXTRAIDOS ===========\n")
-
-    print("DESTINATARIO:", destinatario)
-
-    print("ATO:", tipo_ato)
-
-    print("ESCREVENTE:", escrevente)
-
-    print("\n=======================================\n")
-
-    return {
-        "destinatario": destinatario,
-        "tipo_ato": tipo_ato,
-        "escrevente": escrevente
-    }
-
-# =====================================
-# PÁGINA INICIAL
-# =====================================
+# =========================
+# HOME
+# =========================
 
 @app.route("/")
-def inicio():
-
+def index():
     return render_template("index.html")
 
-# =====================================
-# SALVAR RETIRADA
-# =====================================
+
+# =========================
+# SALVAR
+# =========================
 
 @app.route("/salvar", methods=["POST"])
 def salvar():
 
-    destinatario = request.form["destinatario"]
+    nome = request.form.get("nome")
+    retirado_por = request.form.get("retirado_por")
+    data_retirada = request.form.get("data_retirada")
+    escrevente = request.form.get("escrevente")
 
-    tipo_ato = request.form["tipo_ato"]
+    arquivo = request.files.get("arquivo")
 
-    retirado_por = request.form["retirado_por"]
+    nome_arquivo = ""
 
-    data_retirada = request.form["data_retirada"]
-
-    escrevente = request.form["escrevente"]
-
-    arquivo = request.files["pdf"]
-
-    nome_pdf = ""
+    ato = ""
 
     if arquivo:
 
-        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        nome_arquivo = secure_filename(arquivo.filename)
 
-        nome_pdf = f"RET_{timestamp}.pdf"
-
-        caminho = os.path.join(
-            UPLOAD_FOLDER,
-            nome_pdf
-        )
+        caminho = os.path.join(UPLOAD_FOLDER, nome_arquivo)
 
         arquivo.save(caminho)
 
-        # =====================================
-        # OCR
-        # =====================================
-
         texto_ocr = ler_pdf_ocr(caminho)
 
-        dados = extrair_dados(texto_ocr)
+        nome_extraido, ato_extraido = extrair_dados(texto_ocr)
 
-        # =====================================
-        # PREENCHIMENTO AUTOMÁTICO
-        # =====================================
+        if not nome:
+            nome = nome_extraido
 
-        if not destinatario:
-            destinatario = dados["destinatario"]
+        ato = ato_extraido
 
-        if not tipo_ato:
-            tipo_ato = dados["tipo_ato"]
-
-        if not escrevente:
-            escrevente = dados["escrevente"]
-
-    conn = sqlite3.connect("banco.db")
+    conn = sqlite3.connect(DB)
     cursor = conn.cursor()
 
     cursor.execute("""
-
-    INSERT INTO retiradas (
-
-        destinatario,
-        tipo_ato,
-        retirado_por,
-        data_retirada,
-        escrevente,
-        pdf
-
-    )
-
+    INSERT INTO retiradas
+    (nome, ato, retirado_por, data_retirada, escrevente, arquivo)
     VALUES (?, ?, ?, ?, ?, ?)
-
     """, (
-
-        destinatario,
-        tipo_ato,
+        nome,
+        ato,
         retirado_por,
         data_retirada,
         escrevente,
-        nome_pdf
-
+        nome_arquivo
     ))
 
     conn.commit()
     conn.close()
 
-    return redirect("/pesquisar")
+    return redirect("/")
 
-# =====================================
-# PESQUISAR
-# =====================================
 
-@app.route("/pesquisar")
-def pesquisar():
+# =========================
+# PESQUISA
+# =========================
+
+@app.route("/pesquisa")
+def pesquisa():
 
     termo = request.args.get("termo", "")
 
-    conn = sqlite3.connect("banco.db")
+    conn = sqlite3.connect(DB)
     cursor = conn.cursor()
 
-    cursor.execute("""
+    if termo:
+        cursor.execute("""
+        SELECT * FROM retiradas
+        WHERE nome LIKE ?
+        ORDER BY id DESC
+        """, ('%' + termo + '%',))
+    else:
+        cursor.execute("""
+        SELECT * FROM retiradas
+        ORDER BY id DESC
+        """)
 
-    SELECT * FROM retiradas
-
-    WHERE destinatario LIKE ?
-
-    ORDER BY id DESC
-
-    """, (f"%{termo}%",))
-
-    retiradas = cursor.fetchall()
+    dados = cursor.fetchall()
 
     conn.close()
 
     return render_template(
         "pesquisa.html",
-        retiradas=retiradas
+        dados=dados,
+        termo=termo
     )
 
-# =====================================
-# ABRIR PDF
-# =====================================
 
-@app.route("/pdf/<nome_pdf>")
-def abrir_pdf(nome_pdf):
+# =========================
+# DOWNLOAD PDF
+# =========================
 
-    return send_from_directory(
-        "uploads",
-        nome_pdf
-    )
+@app.route("/uploads/<arquivo>")
+def uploads(arquivo):
+    return send_from_directory(UPLOAD_FOLDER, arquivo)
 
-# =====================================
-# INICIAR SERVIDOR
-# =====================================
 
-app.run(
-    host="0.0.0.0",
-    port=5000,
-    debug=True
-)
+# =========================
+# INICIAR
+# =========================
+
+if __name__ == "__main__":
+    app.run()
