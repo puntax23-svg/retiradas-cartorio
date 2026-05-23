@@ -1,7 +1,6 @@
-from flask import Flask, render_template, request, redirect, send_from_directory
+from flask import Flask, render_template, request, redirect
 import sqlite3
 import os
-from werkzeug.utils import secure_filename
 import fitz
 import pytesseract
 from PIL import Image
@@ -9,110 +8,64 @@ from PIL import Image
 app = Flask(__name__)
 
 UPLOAD_FOLDER = "uploads"
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-DB = "banco.db"
-
+if not os.path.exists(UPLOAD_FOLDER):
+    os.makedirs(UPLOAD_FOLDER)
 
 # =========================
 # CRIAR BANCO
 # =========================
 
-def criar_banco():
+conn = sqlite3.connect("banco.db")
+cursor = conn.cursor()
 
-    conn = sqlite3.connect(DB)
-    cursor = conn.cursor()
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS retiradas (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nome TEXT,
+    ato TEXT,
+    retirado_por TEXT,
+    data_retirada TEXT,
+    escrevente TEXT,
+    arquivo TEXT,
+    ocr TEXT
+)
+""")
 
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS retiradas (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        nome TEXT,
-        ato TEXT,
-        retirado_por TEXT,
-        data_retirada TEXT,
-        escrevente TEXT,
-        arquivo TEXT
-    )
-    """)
-
-    conn.commit()
-    conn.close()
-
-
-criar_banco()
-
+conn.commit()
+conn.close()
 
 # =========================
 # OCR PDF
 # =========================
 
-def ler_pdf_ocr(caminho_pdf):
+def ler_pdf_ocr(caminho):
 
     texto_total = ""
 
-    pdf = fitz.open(caminho_pdf)
+    pdf = fitz.open(caminho)
 
     for pagina in pdf:
 
         pix = pagina.get_pixmap()
 
-        imagem_path = "pagina_temp.png"
+        imagem_path = "temp.png"
 
         pix.save(imagem_path)
 
-        imagem = Image.open(imagem_path)
+        texto = pytesseract.image_to_string(Image.open(imagem_path))
 
-        texto = pytesseract.image_to_string(
-            imagem,
-            lang="por"
-        )
-
-        texto_total += texto + "\n"
+        texto_total += texto
 
     return texto_total
-
-
-# =========================
-# EXTRAIR DADOS
-# =========================
-
-def extrair_dados(texto):
-
-    linhas = texto.split("\n")
-
-    nome = ""
-    ato = ""
-
-    for linha in linhas:
-
-        linha = linha.strip()
-
-        if len(linha) > 10 and nome == "":
-            nome = linha.upper()
-
-        if "ESCRITURA" in linha.upper():
-            ato = linha
-
-        elif "PROCURAÇÃO" in linha.upper():
-            ato = linha
-
-        elif "ATA" in linha.upper():
-            ato = linha
-
-        elif "RECONHECIMENTO" in linha.upper():
-            ato = linha
-
-    return nome, ato
-
 
 # =========================
 # HOME
 # =========================
 
 @app.route("/")
-def index():
+def home():
     return render_template("index.html")
-
 
 # =========================
 # SALVAR
@@ -127,64 +80,44 @@ def salvar():
     data_retirada = request.form.get("data_retirada")
     escrevente = request.form.get("escrevente")
 
-    arquivo = request.files.get("arquivo")
+    arquivo = request.files["arquivo"]
 
-    nome_arquivo = ""
+    nome_arquivo = arquivo.filename
 
-    if arquivo and arquivo.filename != "":
+    caminho = os.path.join(UPLOAD_FOLDER, nome_arquivo)
 
-        nome_arquivo = secure_filename(arquivo.filename)
+    arquivo.save(caminho)
 
-        caminho = os.path.join(
-            UPLOAD_FOLDER,
-            nome_arquivo
-        )
+    texto_ocr = ler_pdf_ocr(caminho)
 
-        arquivo.save(caminho)
-
-        try:
-
-            texto_ocr = ler_pdf_ocr(caminho)
-
-            nome_extraido, ato_extraido = extrair_dados(texto_ocr)
-
-            if not nome:
-                nome = nome_extraido
-
-            if not ato:
-                ato = ato_extraido
-
-        except Exception as erro:
-            print("ERRO OCR:", erro)
-
-    conn = sqlite3.connect(DB)
+    conn = sqlite3.connect("banco.db")
     cursor = conn.cursor()
 
     cursor.execute("""
-    INSERT INTO retiradas
-    (
+    INSERT INTO retiradas (
         nome,
         ato,
         retirado_por,
         data_retirada,
         escrevente,
-        arquivo
+        arquivo,
+        ocr
     )
-    VALUES (?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
     """, (
         nome,
         ato,
         retirado_por,
         data_retirada,
         escrevente,
-        nome_arquivo
+        nome_arquivo,
+        texto_ocr
     ))
 
     conn.commit()
     conn.close()
 
     return redirect("/pesquisa")
-
 
 # =========================
 # PESQUISA
@@ -195,43 +128,110 @@ def pesquisa():
 
     termo = request.args.get("termo", "")
 
-    conn = sqlite3.connect(DB)
-    cursor = conn.cursor()
+    resultados = []
 
-    if termo:
+    if termo != "":
+
+        conn = sqlite3.connect("banco.db")
+        cursor = conn.cursor()
 
         cursor.execute("""
-        SELECT * FROM retiradas
+        SELECT nome, arquivo
+        FROM retiradas
         WHERE nome LIKE ?
-        ORDER BY id DESC
         """, ('%' + termo + '%',))
 
-    else:
+        resultados = cursor.fetchall()
 
-        cursor.execute("""
-        SELECT * FROM retiradas
-        ORDER BY id DESC
-        """)
+        conn.close()
 
-    dados = cursor.fetchall()
+    html = """
+    <html>
+    <head>
+    <title>Pesquisa</title>
 
-    conn.close()
+    <style>
 
-    return render_template(
-        "pesquisa.html",
-        dados=dados,
-        termo=termo
-    )
+    body{
+        font-family: Arial;
+        background:#f4f4f4;
+    }
 
+    .container{
+        width:800px;
+        margin:auto;
+        margin-top:50px;
+    }
+
+    input{
+        width:80%;
+        padding:15px;
+    }
+
+    button{
+        padding:15px;
+    }
+
+    .item{
+        background:white;
+        padding:20px;
+        margin-top:20px;
+        border-radius:10px;
+    }
+
+    </style>
+
+    </head>
+    <body>
+
+    <div class='container'>
+
+    <h1>PESQUISA DE RETIRADAS</h1>
+
+    <form>
+
+    <input
+        type='text'
+        name='termo'
+        placeholder='Pesquisar destinatário'
+    >
+
+    <button type='submit'>
+        Pesquisar
+    </button>
+
+    </form>
+    """
+
+    for r in resultados:
+
+        html += f"""
+        <div class='item'>
+            <b>{r[0]}</b><br><br>
+
+            <a href='/uploads/{r[1]}' target='_blank'>
+                Abrir PDF
+            </a>
+        </div>
+        """
+
+    html += "</div></body></html>"
+
+    return html
 
 # =========================
-# DOWNLOAD PDF
+# SERVIR UPLOADS
 # =========================
 
-@app.route("/uploads/<arquivo>")
-def uploads(arquivo):
+from flask import send_from_directory
 
-    return send_from_directory(
-        UPLOAD_FOLDER,
-        arquivo
-    )
+@app.route('/uploads/<path:nome>')
+def uploads(nome):
+    return send_from_directory(UPLOAD_FOLDER, nome)
+
+# =========================
+# START
+# =========================
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=10000)
