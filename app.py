@@ -1,10 +1,7 @@
-from flask import Flask, render_template, request, send_from_directory
+from flask import Flask, render_template, request, redirect, send_from_directory
 import sqlite3
 import os
 from werkzeug.utils import secure_filename
-import fitz
-import pytesseract
-from PIL import Image
 
 app = Flask(__name__)
 
@@ -43,166 +40,11 @@ criar_banco()
 
 
 # =========================
-# OCR PDF
+# HOME + PESQUISA
 # =========================
 
-def ler_pdf_ocr(caminho_pdf):
-
-    texto_total = ""
-
-    pdf = fitz.open(caminho_pdf)
-
-    for numero_pagina in range(len(pdf)):
-
-        pagina = pdf.load_page(numero_pagina)
-
-        matriz = fitz.Matrix(3, 3)
-
-        pix = pagina.get_pixmap(matrix=matriz)
-
-        imagem_path = f"pagina_{numero_pagina}.png"
-
-        pix.save(imagem_path)
-
-        imagem = Image.open(imagem_path)
-
-        imagem = imagem.convert("L")
-
-        texto = pytesseract.image_to_string(
-            imagem,
-            lang="por",
-            config="--psm 6"
-        )
-
-        texto_total += texto + "\n"
-
-    return texto_total
-
-
-# =========================
-# EXTRAIR DADOS
-# =========================
-
-def extrair_dados(texto):
-
-    linhas = texto.split("\n")
-
-    nome = ""
-    ato = ""
-
-    for linha in linhas:
-
-        linha = linha.strip()
-
-        if (
-            len(linha) > 5
-            and len(linha) < 80
-            and nome == ""
-        ):
-
-            if (
-                "REPÚBLICA" not in linha.upper()
-                and "TABELIÃO" not in linha.upper()
-                and "LIVRO" not in linha.upper()
-                and "FOLHA" not in linha.upper()
-                and "PROCURAÇÃO" not in linha.upper()
-                and "ESCRITURA" not in linha.upper()
-                and "RG" not in linha.upper()
-                and "CPF" not in linha.upper()
-            ):
-
-                nome = linha.upper()
-
-        if "ESCRITURA" in linha.upper():
-            ato = linha
-
-        elif "PROCURAÇÃO" in linha.upper():
-            ato = linha
-
-        elif "ATA" in linha.upper():
-            ato = linha
-
-        elif "RECONHECIMENTO" in linha.upper():
-            ato = linha
-
-        elif "VENDA E COMPRA" in linha.upper():
-            ato = linha
-
-    return nome, ato
-
-
-# =========================
-# HOME + SALVAR + PESQUISA
-# =========================
-
-@app.route("/", methods=["GET", "POST"])
+@app.route("/")
 def index():
-
-    if request.method == "POST":
-
-        nome = request.form.get("nome")
-        ato = request.form.get("ato")
-        retirado_por = request.form.get("retirado_por")
-        data_retirada = request.form.get("data_retirada")
-        escrevente = request.form.get("escrevente")
-
-        arquivo = request.files.get("arquivo")
-
-        nome_arquivo = ""
-
-        if arquivo and arquivo.filename != "":
-
-            nome_arquivo = secure_filename(arquivo.filename)
-
-            caminho = os.path.join(
-                UPLOAD_FOLDER,
-                nome_arquivo
-            )
-
-            arquivo.save(caminho)
-
-            try:
-
-                texto_ocr = ler_pdf_ocr(caminho)
-
-                nome_extraido, ato_extraido = extrair_dados(texto_ocr)
-
-                if not nome or nome.strip() == "":
-                    nome = nome_extraido
-
-                if not ato or ato.strip() == "":
-                    ato = ato_extraido
-
-            except Exception as erro:
-
-                print("ERRO OCR:")
-                print(erro)
-
-        conn = sqlite3.connect(DB)
-        cursor = conn.cursor()
-
-        cursor.execute("""
-        INSERT INTO retiradas
-        (
-            nome,
-            ato,
-            retirado_por,
-            data_retirada,
-            escrevente,
-            arquivo
-        )
-        VALUES (?, ?, ?, ?, ?, ?)
-        """, (
-            nome,
-            ato,
-            retirado_por,
-            data_retirada,
-            escrevente,
-            nome_arquivo
-        ))
-
-        conn.commit()
-        conn.close()
 
     termo = request.args.get("termo", "")
 
@@ -222,7 +64,6 @@ def index():
         cursor.execute("""
         SELECT * FROM retiradas
         ORDER BY id DESC
-        LIMIT 20
         """)
 
     dados = cursor.fetchall()
@@ -234,6 +75,63 @@ def index():
         dados=dados,
         termo=termo
     )
+
+
+# =========================
+# SALVAR
+# =========================
+
+@app.route("/salvar", methods=["POST"])
+def salvar():
+
+    nome = request.form.get("nome")
+    ato = request.form.get("ato")
+    retirado_por = request.form.get("retirado_por")
+    data_retirada = request.form.get("data_retirada")
+    escrevente = request.form.get("escrevente")
+
+    arquivo = request.files.get("arquivo")
+
+    nome_arquivo = ""
+
+    if arquivo and arquivo.filename != "":
+
+        nome_arquivo = secure_filename(arquivo.filename)
+
+        caminho = os.path.join(
+            UPLOAD_FOLDER,
+            nome_arquivo
+        )
+
+        arquivo.save(caminho)
+
+    conn = sqlite3.connect(DB)
+    cursor = conn.cursor()
+
+    cursor.execute("""
+    INSERT INTO retiradas
+    (
+        nome,
+        ato,
+        retirado_por,
+        data_retirada,
+        escrevente,
+        arquivo
+    )
+    VALUES (?, ?, ?, ?, ?, ?)
+    """, (
+        nome,
+        ato,
+        retirado_por,
+        data_retirada,
+        escrevente,
+        nome_arquivo
+    ))
+
+    conn.commit()
+    conn.close()
+
+    return redirect("/")
 
 
 # =========================
@@ -254,9 +152,4 @@ def uploads(arquivo):
 # =========================
 
 if __name__ == "__main__":
-
-    app.run(
-        host="0.0.0.0",
-        port=5000,
-        debug=True
-    )
+    app.run(host="0.0.0.0", port=5000)
