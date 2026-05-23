@@ -12,20 +12,30 @@
         body{
             font-family: Arial;
             background: #f4f4f4;
+            margin: 0;
+            padding: 0;
         }
 
         .container{
-            width: 700px;
+            width: 900px;
             margin: auto;
+            margin-top: 30px;
+        }
+
+        .box{
             background: white;
             padding: 20px;
-            margin-top: 30px;
             border-radius: 10px;
+            margin-bottom: 30px;
         }
 
         h1{
             text-align: center;
             margin-bottom: 40px;
+        }
+
+        h2{
+            margin-bottom: 20px;
         }
 
         input{
@@ -38,18 +48,38 @@
         }
 
         button{
-            width: 100%;
             padding: 15px;
             background: #2952d1;
             color: white;
             border: none;
             border-radius: 5px;
-            font-size: 18px;
             cursor: pointer;
         }
 
         button:hover{
             background: #1d3ea3;
+        }
+
+        .salvar{
+            width: 100%;
+            font-size: 18px;
+        }
+
+        .pesquisa-form{
+            display: flex;
+            gap: 10px;
+        }
+
+        .resultado{
+            background: #fafafa;
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+
+        a{
+            color: blue;
+            text-decoration: none;
         }
 
     </style>
@@ -60,55 +90,123 @@
 
     <div class="container">
 
-        <h1>FABIO CONTRERAS - RETIRADAS</h1>
+        <!-- CADASTRO -->
 
-        <form
-            action="/salvar"
-            method="POST"
-            enctype="multipart/form-data"
-        >
+        <div class="box">
 
-            <input
-                type="text"
-                name="nome"
-                placeholder="Destinatário"
+            <h1>FABIO CONTRERAS - RETIRADAS</h1>
+
+            <form
+                action="/salvar"
+                method="POST"
+                enctype="multipart/form-data"
             >
 
-            <input
-                type="text"
-                name="ato"
-                placeholder="Tipo do ato"
+                <input
+                    type="text"
+                    name="nome"
+                    placeholder="Destinatário"
+                >
+
+                <input
+                    type="text"
+                    name="ato"
+                    placeholder="Tipo do ato"
+                >
+
+                <input
+                    type="text"
+                    name="retirado_por"
+                    placeholder="Retirado por"
+                >
+
+                <input
+                    type="text"
+                    name="data_retirada"
+                    placeholder="Data retirada"
+                >
+
+                <input
+                    type="text"
+                    name="escrevente"
+                    placeholder="Escrevente"
+                >
+
+                <input
+                    type="file"
+                    name="arquivo"
+                >
+
+                <button
+                    type="submit"
+                    class="salvar"
+                >
+                    Salvar Retirada
+                </button>
+
+            </form>
+
+        </div>
+
+
+        <!-- PESQUISA -->
+
+        <div class="box">
+
+            <h2>PESQUISA DE RETIRADAS</h2>
+
+            <form
+                action="/"
+                method="GET"
+                class="pesquisa-form"
             >
 
-            <input
-                type="text"
-                name="retirado_por"
-                placeholder="Retirado por"
-            >
+                <input
+                    type="text"
+                    name="termo"
+                    placeholder="Pesquisar destinatário"
+                    value="{{ termo }}"
+                >
 
-            <input
-                type="text"
-                name="data_retirada"
-                placeholder="Data retirada"
-            >
+                <button type="submit">
+                    Pesquisar
+                </button>
 
-            <input
-                type="text"
-                name="escrevente"
-                placeholder="Escrevente"
-            >
+            </form>
 
-            <input
-                type="file"
-                name="arquivo"
-                required
-            >
 
-            <button type="submit">
-                Salvar Retirada
-            </button>
+            {% for item in dados %}
 
-        </form>
+            <div class="resultado">
+
+                <p><b>Destinatário:</b> {{ item[1] }}</p>
+
+                <p><b>Ato:</b> {{ item[2] }}</p>
+
+                <p><b>Retirado por:</b> {{ item[3] }}</p>
+
+                <p><b>Data:</b> {{ item[4] }}</p>
+
+                <p><b>Escrevente:</b> {{ item[5] }}</p>
+
+                {% if item[6] %}
+
+                <p>
+                    <a
+                        href="/uploads/{{ item[6] }}"
+                        target="_blank"
+                    >
+                        Abrir PDF
+                    </a>
+                </p>
+
+                {% endif %}
+
+            </div>
+
+            {% endfor %}
+
+        </div>
 
     </div>
 
