@@ -122,6 +122,7 @@ def index():
 def salvar():
 
     nome = request.form.get("nome")
+    ato = request.form.get("ato")
     retirado_por = request.form.get("retirado_por")
     data_retirada = request.form.get("data_retirada")
     escrevente = request.form.get("escrevente")
@@ -129,7 +130,6 @@ def salvar():
     arquivo = request.files.get("arquivo")
 
     nome_arquivo = ""
-    ato = ""
 
     if arquivo and arquivo.filename != "":
 
@@ -142,14 +142,20 @@ def salvar():
 
         arquivo.save(caminho)
 
-        texto_ocr = ler_pdf_ocr(caminho)
+        try:
 
-        nome_extraido, ato_extraido = extrair_dados(texto_ocr)
+            texto_ocr = ler_pdf_ocr(caminho)
 
-        if not nome:
-            nome = nome_extraido
+            nome_extraido, ato_extraido = extrair_dados(texto_ocr)
 
-        ato = ato_extraido
+            if not nome:
+                nome = nome_extraido
+
+            if not ato:
+                ato = ato_extraido
+
+        except Exception as erro:
+            print("ERRO OCR:", erro)
 
     conn = sqlite3.connect(DB)
     cursor = conn.cursor()
@@ -177,7 +183,7 @@ def salvar():
     conn.commit()
     conn.close()
 
-    return redirect("/")
+    return redirect("/pesquisa")
 
 
 # =========================
