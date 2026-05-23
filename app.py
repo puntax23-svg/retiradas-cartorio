@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, send_from_directory
+from flask import Flask, render_template, request, send_from_directory
 import sqlite3
 import os
 from werkzeug.utils import secure_filename
@@ -74,9 +74,6 @@ def ler_pdf_ocr(caminho_pdf):
             config="--psm 6"
         )
 
-        print("========== TEXTO OCR ==========")
-        print(texto)
-
         texto_total += texto + "\n"
 
     return texto_total
@@ -128,99 +125,84 @@ def extrair_dados(texto):
         elif "RECONHECIMENTO" in linha.upper():
             ato = linha
 
+        elif "VENDA E COMPRA" in linha.upper():
+            ato = linha
+
     return nome, ato
 
 
 # =========================
-# HOME
+# HOME + SALVAR + PESQUISA
 # =========================
 
-@app.route("/")
+@app.route("/", methods=["GET", "POST"])
 def index():
 
-    return render_template("index.html")
+    if request.method == "POST":
 
+        nome = request.form.get("nome")
+        ato = request.form.get("ato")
+        retirado_por = request.form.get("retirado_por")
+        data_retirada = request.form.get("data_retirada")
+        escrevente = request.form.get("escrevente")
 
-# =========================
-# SALVAR
-# =========================
+        arquivo = request.files.get("arquivo")
 
-@app.route("/salvar", methods=["POST"])
-def salvar():
+        nome_arquivo = ""
 
-    nome = request.form.get("nome")
-    ato = request.form.get("ato")
-    retirado_por = request.form.get("retirado_por")
-    data_retirada = request.form.get("data_retirada")
-    escrevente = request.form.get("escrevente")
+        if arquivo and arquivo.filename != "":
 
-    arquivo = request.files.get("arquivo")
+            nome_arquivo = secure_filename(arquivo.filename)
 
-    nome_arquivo = ""
+            caminho = os.path.join(
+                UPLOAD_FOLDER,
+                nome_arquivo
+            )
 
-    if arquivo and arquivo.filename != "":
+            arquivo.save(caminho)
 
-        nome_arquivo = secure_filename(arquivo.filename)
+            try:
 
-        caminho = os.path.join(
-            UPLOAD_FOLDER,
-            nome_arquivo
+                texto_ocr = ler_pdf_ocr(caminho)
+
+                nome_extraido, ato_extraido = extrair_dados(texto_ocr)
+
+                if not nome or nome.strip() == "":
+                    nome = nome_extraido
+
+                if not ato or ato.strip() == "":
+                    ato = ato_extraido
+
+            except Exception as erro:
+
+                print("ERRO OCR:")
+                print(erro)
+
+        conn = sqlite3.connect(DB)
+        cursor = conn.cursor()
+
+        cursor.execute("""
+        INSERT INTO retiradas
+        (
+            nome,
+            ato,
+            retirado_por,
+            data_retirada,
+            escrevente,
+            arquivo
         )
+        VALUES (?, ?, ?, ?, ?, ?)
+        """, (
+            nome,
+            ato,
+            retirado_por,
+            data_retirada,
+            escrevente,
+            nome_arquivo
+        ))
 
-        arquivo.save(caminho)
-
-        try:
-
-            texto_ocr = ler_pdf_ocr(caminho)
-
-            nome_extraido, ato_extraido = extrair_dados(texto_ocr)
-
-            if not nome or nome.strip() == "":
-                nome = nome_extraido
-
-            if not ato or ato.strip() == "":
-                ato = ato_extraido
-
-        except Exception as erro:
-
-            print("ERRO OCR:")
-            print(erro)
-
-    conn = sqlite3.connect(DB)
-    cursor = conn.cursor()
-
-    cursor.execute("""
-    INSERT INTO retiradas
-    (
-        nome,
-        ato,
-        retirado_por,
-        data_retirada,
-        escrevente,
-        arquivo
-    )
-    VALUES (?, ?, ?, ?, ?, ?)
-    """, (
-        nome,
-        ato,
-        retirado_por,
-        data_retirada,
-        escrevente,
-        nome_arquivo
-    ))
-
-    conn.commit()
-    conn.close()
-
-    return redirect("/pesquisa")
-
-
-# =========================
-# PESQUISA
-# =========================
-
-@app.route("/pesquisa")
-def pesquisa():
+        conn.commit()
+        conn.close()
 
     termo = request.args.get("termo", "")
 
@@ -240,6 +222,7 @@ def pesquisa():
         cursor.execute("""
         SELECT * FROM retiradas
         ORDER BY id DESC
+        LIMIT 20
         """)
 
     dados = cursor.fetchall()
@@ -247,7 +230,7 @@ def pesquisa():
     conn.close()
 
     return render_template(
-        "pesquisa.html",
+        "index.html",
         dados=dados,
         termo=termo
     )
