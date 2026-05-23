@@ -19,6 +19,7 @@ DB = "banco.db"
 # =========================
 
 def criar_banco():
+
     conn = sqlite3.connect(DB)
     cursor = conn.cursor()
 
@@ -46,17 +47,20 @@ criar_banco()
 # =========================
 
 def ler_pdf_ocr(caminho_pdf):
+
     texto_total = ""
 
     pdf = fitz.open(caminho_pdf)
 
     for pagina in pdf:
+
         pix = pagina.get_pixmap()
 
-        img_path = "pagina.png"
-        pix.save(img_path)
+        imagem_path = "pagina_temp.png"
 
-        imagem = Image.open(img_path)
+        pix.save(imagem_path)
+
+        imagem = Image.open(imagem_path)
 
         texto = pytesseract.image_to_string(
             imagem,
@@ -73,6 +77,7 @@ def ler_pdf_ocr(caminho_pdf):
 # =========================
 
 def extrair_dados(texto):
+
     linhas = texto.split("\n")
 
     nome = ""
@@ -124,14 +129,16 @@ def salvar():
     arquivo = request.files.get("arquivo")
 
     nome_arquivo = ""
-
     ato = ""
 
-    if arquivo:
+    if arquivo and arquivo.filename != "":
 
         nome_arquivo = secure_filename(arquivo.filename)
 
-        caminho = os.path.join(UPLOAD_FOLDER, nome_arquivo)
+        caminho = os.path.join(
+            UPLOAD_FOLDER,
+            nome_arquivo
+        )
 
         arquivo.save(caminho)
 
@@ -149,7 +156,14 @@ def salvar():
 
     cursor.execute("""
     INSERT INTO retiradas
-    (nome, ato, retirado_por, data_retirada, escrevente, arquivo)
+    (
+        nome,
+        ato,
+        retirado_por,
+        data_retirada,
+        escrevente,
+        arquivo
+    )
     VALUES (?, ?, ?, ?, ?, ?)
     """, (
         nome,
@@ -179,12 +193,15 @@ def pesquisa():
     cursor = conn.cursor()
 
     if termo:
+
         cursor.execute("""
         SELECT * FROM retiradas
         WHERE nome LIKE ?
         ORDER BY id DESC
         """, ('%' + termo + '%',))
+
     else:
+
         cursor.execute("""
         SELECT * FROM retiradas
         ORDER BY id DESC
@@ -207,12 +224,8 @@ def pesquisa():
 
 @app.route("/uploads/<arquivo>")
 def uploads(arquivo):
-    return send_from_directory(UPLOAD_FOLDER, arquivo)
 
-
-# =========================
-# INICIAR
-# =========================
-
-if __name__ == "__main__":
-    app.run()
+    return send_from_directory(
+        UPLOAD_FOLDER,
+        arquivo
+    )
