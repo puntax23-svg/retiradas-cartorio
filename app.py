@@ -1,144 +1,238 @@
-<!DOCTYPE html>
-<html lang="pt-br">
-<head>
+from flask import Flask, render_template, request, redirect, send_from_directory
+import sqlite3
+import os
+from werkzeug.utils import secure_filename
+import fitz
+import pytesseract
+from PIL import Image
 
-<meta charset="UTF-8">
+app = Flask(__name__)
 
-<title>Fabio Contreras - Retiradas</title>
+UPLOAD_FOLDER = "uploads"
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-<style>
+DB = "banco.db"
 
-body{
-    font-family: Arial;
-    background:#f4f4f4;
-}
 
-.container{
-    width:700px;
-    margin:auto;
-    margin-top:40px;
-    background:white;
-    padding:30px;
-    border-radius:10px;
-}
+# =========================
+# CRIAR BANCO
+# =========================
 
-h1{
-    text-align:center;
-    margin-bottom:40px;
-}
+def criar_banco():
 
-input{
-    width:100%;
-    padding:15px;
-    margin-bottom:20px;
-    border:1px solid #ccc;
-    border-radius:5px;
-    box-sizing:border-box;
-}
+    conn = sqlite3.connect(DB)
+    cursor = conn.cursor()
 
-button{
-    width:100%;
-    padding:15px;
-    background:#2952d1;
-    color:white;
-    border:none;
-    border-radius:5px;
-    font-size:18px;
-    cursor:pointer;
-}
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS retiradas (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        nome TEXT,
+        ato TEXT,
+        retirado_por TEXT,
+        data_retirada TEXT,
+        escrevente TEXT,
+        arquivo TEXT
+    )
+    """)
 
-button:hover{
-    background:#1d3ea3;
-}
+    conn.commit()
+    conn.close()
 
-</style>
 
-</head>
+criar_banco()
 
-<body>
 
-<div class="container">
+# =========================
+# OCR PDF
+# =========================
 
-<h1>FABIO CONTRERAS - RETIRADAS</h1>
+def ler_pdf_ocr(caminho_pdf):
 
-<form id="formulario" enctype="multipart/form-data">
+    texto_total = ""
 
-    <input
-        type="text"
-        name="nome"
-        placeholder="Destinatário"
-        required
-    >
+    pdf = fitz.open(caminho_pdf)
 
-    <input
-        type="text"
-        name="ato"
-        placeholder="Tipo do ato"
-    >
+    for pagina in pdf:
 
-    <input
-        type="text"
-        name="retirado_por"
-        placeholder="Retirado por"
-    >
+        pix = pagina.get_pixmap()
 
-    <input
-        type="text"
-        name="data_retirada"
-        placeholder="Data retirada"
-    >
+        imagem_path = "pagina_temp.png"
 
-    <input
-        type="text"
-        name="escrevente"
-        placeholder="Escrevente"
-    >
+        pix.save(imagem_path)
 
-    <input
-        type="file"
-        name="arquivo"
-        required
-    >
+        imagem = Image.open(imagem_path)
 
-    <button type="submit">
-        Salvar Retirada
-    </button>
+        texto = pytesseract.image_to_string(
+            imagem,
+            lang="por"
+        )
 
-</form>
+        texto_total += texto + "\n"
 
-</div>
+    return texto_total
 
-<script>
 
-document
-.getElementById("formulario")
-.addEventListener("submit", function(e){
+# =========================
+# EXTRAIR DADOS
+# =========================
 
-    e.preventDefault();
+def extrair_dados(texto):
 
-    const formData = new FormData(this);
+    linhas = texto.split("\n")
 
-    fetch("/salvar", {
-        method: "POST",
-        body: formData
-    })
-    .then(response => {
+    nome = ""
+    ato = ""
 
-        if(response.redirected){
-            window.location.href = response.url;
-        }else{
-            alert("Erro ao salvar");
-        }
+    for linha in linhas:
 
-    })
-    .catch(error => {
-        alert("Erro no envio");
-        console.log(error);
-    });
+        linha = linha.strip()
 
-});
+        if len(linha) > 5 and nome == "":
+            nome = linha.upper()
 
-</script>
+        if "ESCRITURA" in linha.upper():
+            ato = linha
 
-</body>
-</html>
+        elif "PROCURAÇÃO" in linha.upper():
+            ato = linha
+
+        elif "ATA" in linha.upper():
+            ato = linha
+
+        elif "RECONHECIMENTO" in linha.upper():
+            ato = linha
+
+    return nome, ato
+
+
+# =========================
+# HOME
+# =========================
+
+@app.route("/")
+def index():
+
+    return render_template("index.html")
+
+
+# =========================
+# SALVAR
+# =========================
+
+@app.route("/salvar", methods=["POST"])
+def salvar():
+
+    nome = request.form.get("nome")
+    ato = request.form.get("ato")
+    retirado_por = request.form.get("retirado_por")
+    data_retirada = request.form.get("data_retirada")
+    escrevente = request.form.get("escrevente")
+
+    arquivo = request.files.get("arquivo")
+
+    nome_arquivo = ""
+
+    if arquivo and arquivo.filename != "":
+
+        nome_arquivo = secure_filename(arquivo.filename)
+
+        caminho = os.path.join(
+            UPLOAD_FOLDER,
+            nome_arquivo
+        )
+
+        arquivo.save(caminho)
+
+        try:
+
+            texto_ocr = ler_pdf_ocr(caminho)
+
+            nome_extraido, ato_extraido = extrair_dados(texto_ocr)
+
+            if not nome:
+                nome = nome_extraido
+
+            if not ato:
+                ato = ato_extraido
+
+        except Exception as erro:
+            print("ERRO OCR:", erro)
+
+    conn = sqlite3.connect(DB)
+    cursor = conn.cursor()
+
+    cursor.execute("""
+    INSERT INTO retiradas
+    (
+        nome,
+        ato,
+        retirado_por,
+        data_retirada,
+        escrevente,
+        arquivo
+    )
+    VALUES (?, ?, ?, ?, ?, ?)
+    """, (
+        nome,
+        ato,
+        retirado_por,
+        data_retirada,
+        escrevente,
+        nome_arquivo
+    ))
+
+    conn.commit()
+    conn.close()
+
+    return redirect("/pesquisa")
+
+
+# =========================
+# PESQUISA
+# =========================
+
+@app.route("/pesquisa")
+def pesquisa():
+
+    termo = request.args.get("termo", "")
+
+    conn = sqlite3.connect(DB)
+    cursor = conn.cursor()
+
+    if termo:
+
+        cursor.execute("""
+        SELECT * FROM retiradas
+        WHERE nome LIKE ?
+        ORDER BY id DESC
+        """, ('%' + termo + '%',))
+
+    else:
+
+        cursor.execute("""
+        SELECT * FROM retiradas
+        ORDER BY id DESC
+        """)
+
+    dados = cursor.fetchall()
+
+    conn.close()
+
+    return render_template(
+        "pesquisa.html",
+        dados=dados,
+        termo=termo
+    )
+
+
+# =========================
+# DOWNLOAD PDF
+# =========================
+
+@app.route("/uploads/<arquivo>")
+def uploads(arquivo):
+
+    return send_from_directory(
+        UPLOAD_FOLDER,
+        arquivo
+    )
