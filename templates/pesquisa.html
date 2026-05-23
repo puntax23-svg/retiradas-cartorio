@@ -5,31 +5,26 @@
 
     <meta charset="UTF-8">
 
-    <title>Pesquisa</title>
+    <title>Pesquisa de Retiradas</title>
 
     <style>
 
         body{
             font-family: Arial;
             background: #f4f4f4;
-            padding: 40px;
+            padding: 30px;
         }
 
-        .container{
-            max-width: 1000px;
-            margin: auto;
+        h1{
+            margin-bottom: 30px;
         }
 
-        .card{
-            background: white;
-            padding: 20px;
-            margin-bottom: 20px;
-            border-radius: 10px;
-            box-shadow: 0 0 5px rgba(0,0,0,0.1);
+        form{
+            margin-bottom: 30px;
         }
 
         input{
-            width: 80%;
+            width: 70%;
             padding: 12px;
             border: 1px solid #ccc;
             border-radius: 5px;
@@ -37,19 +32,23 @@
 
         button{
             padding: 12px 20px;
-            background: #1d4ed8;
+            background: #2952d1;
             color: white;
             border: none;
             border-radius: 5px;
             cursor: pointer;
         }
 
+        .card{
+            background: white;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 10px;
+        }
+
         a{
-            display: inline-block;
-            margin-top: 10px;
+            color: #2952d1;
             text-decoration: none;
-            color: #1d4ed8;
-            font-weight: bold;
         }
 
     </style>
@@ -58,65 +57,50 @@
 
 <body>
 
-    <div class="container">
+    <h1>PESQUISA DE RETIRADAS</h1>
 
-        <h1>
-            PESQUISA DE RETIRADAS
-        </h1>
+    <form action="/pesquisa" method="GET">
 
-        <form method="GET">
+        <input
+            type="text"
+            name="termo"
+            placeholder="Pesquisar destinatário"
+            value="{{ termo }}"
+        >
 
-            <input
-                type="text"
-                name="termo"
-                placeholder="Pesquisar destinatário"
-            >
+        <button type="submit">
+            Pesquisar
+        </button>
 
-            <button type="submit">
-                Pesquisar
-            </button>
+    </form>
 
-        </form>
+    {% for item in dados %}
 
-        <br><br>
+    <div class="card">
 
-        {% for r in retiradas %}
+        <p><b>Destinatário:</b> {{ item[1] }}</p>
 
-        <div class="card">
+        <p><b>Ato:</b> {{ item[2] }}</p>
 
-            <b>PROTOCOLO:</b>
-            {{ r[0] }}
-            <br><br>
+        <p><b>Retirado por:</b> {{ item[3] }}</p>
 
-            <b>DESTINATÁRIO:</b>
-            {{ r[1] }}
-            <br><br>
+        <p><b>Data:</b> {{ item[4] }}</p>
 
-            <b>ATO:</b>
-            {{ r[2] }}
-            <br><br>
+        <p><b>Escrevente:</b> {{ item[5] }}</p>
 
-            <b>RETIRADO POR:</b>
-            {{ r[3] }}
-            <br><br>
+        {% if item[6] %}
 
-            <b>DATA:</b>
-            {{ r[4] }}
-            <br><br>
-
-            <b>ESCREVENTE:</b>
-            {{ r[5] }}
-            <br><br>
-
-            <a href="/pdf/{{ r[6] }}" target="_blank">
-                ABRIR PDF
+        <p>
+            <a href="/uploads/{{ item[6] }}" target="_blank">
+                Abrir PDF
             </a>
+        </p>
 
-        </div>
-
-        {% endfor %}
+        {% endif %}
 
     </div>
+
+    {% endfor %}
 
 </body>
 
