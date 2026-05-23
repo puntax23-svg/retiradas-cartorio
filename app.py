@@ -87,8 +87,22 @@ def extrair_dados(texto):
 
         linha = linha.strip()
 
-        if len(linha) > 5 and nome == "":
-            nome = linha.upper()
+        if (
+            len(linha) > 5
+            and len(linha) < 80
+            and nome == ""
+        ):
+
+            if (
+                "REPÚBLICA" not in linha.upper()
+                and "TABELIÃO" not in linha.upper()
+                and "LIVRO" not in linha.upper()
+                and "FOLHA" not in linha.upper()
+                and "PROCURAÇÃO" not in linha.upper()
+                and "ESCRITURA" not in linha.upper()
+            ):
+
+                nome = linha.upper()
 
         if "ESCRITURA" in linha.upper():
             ato = linha
@@ -235,4 +249,16 @@ def uploads(arquivo):
     return send_from_directory(
         UPLOAD_FOLDER,
         arquivo
+    )
+
+
+# =========================
+# INICIAR
+# =========================
+
+if __name__ == "__main__":
+
+    app.run(
+        host="0.0.0.0",
+        port=5000
     )
