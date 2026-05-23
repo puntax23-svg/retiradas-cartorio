@@ -52,20 +52,30 @@ def ler_pdf_ocr(caminho_pdf):
 
     pdf = fitz.open(caminho_pdf)
 
-    for pagina in pdf:
+    for numero_pagina in range(len(pdf)):
 
-        pix = pagina.get_pixmap()
+        pagina = pdf.load_page(numero_pagina)
 
-        imagem_path = "pagina_temp.png"
+        matriz = fitz.Matrix(3, 3)
+
+        pix = pagina.get_pixmap(matrix=matriz)
+
+        imagem_path = f"pagina_{numero_pagina}.png"
 
         pix.save(imagem_path)
 
         imagem = Image.open(imagem_path)
 
+        imagem = imagem.convert("L")
+
         texto = pytesseract.image_to_string(
             imagem,
-            lang="por"
+            lang="por",
+            config="--psm 6"
         )
+
+        print("========== TEXTO OCR ==========")
+        print(texto)
 
         texto_total += texto + "\n"
 
@@ -100,6 +110,8 @@ def extrair_dados(texto):
                 and "FOLHA" not in linha.upper()
                 and "PROCURAÇÃO" not in linha.upper()
                 and "ESCRITURA" not in linha.upper()
+                and "RG" not in linha.upper()
+                and "CPF" not in linha.upper()
             ):
 
                 nome = linha.upper()
@@ -163,14 +175,16 @@ def salvar():
 
             nome_extraido, ato_extraido = extrair_dados(texto_ocr)
 
-            if not nome:
+            if not nome or nome.strip() == "":
                 nome = nome_extraido
 
-            if not ato:
+            if not ato or ato.strip() == "":
                 ato = ato_extraido
 
         except Exception as erro:
-            print("ERRO OCR:", erro)
+
+            print("ERRO OCR:")
+            print(erro)
 
     conn = sqlite3.connect(DB)
     cursor = conn.cursor()
@@ -260,5 +274,6 @@ if __name__ == "__main__":
 
     app.run(
         host="0.0.0.0",
-        port=5000
+        port=5000,
+        debug=True
     )
