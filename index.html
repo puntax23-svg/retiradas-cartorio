@@ -1,116 +1,248 @@
-<!DOCTYPE html>
-<html lang="pt-br">
+from flask import Flask, render_template, request, redirect, send_from_directory
+import sqlite3
+import os
+from werkzeug.utils import secure_filename
+import fitz
+import pytesseract
+from PIL import Image
 
-<head>
+app = Flask(__name__)
 
-    <meta charset="UTF-8">
+UPLOAD_FOLDER = "uploads"
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-    <title>23º Tabelião - Retiradas</title>
+DB = "banco.db"
 
-    <style>
 
-        body{
-            font-family: Arial;
-            background: #f4f4f4;
-        }
+# =========================
+# CRIAR BANCO
+# =========================
 
-        .container{
-            width: 700px;
-            margin: auto;
-            background: white;
-            padding: 20px;
-            margin-top: 30px;
-            border-radius: 10px;
-        }
+def criar_banco():
 
-        h1{
-            text-align: center;
-            margin-bottom: 40px;
-        }
+    conn = sqlite3.connect(DB)
+    cursor = conn.cursor()
 
-        input{
-            width: 100%;
-            padding: 15px;
-            margin-bottom: 25px;
-            border: 1px solid #ccc;
-            border-radius: 5px;
-            box-sizing: border-box;
-        }
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS retiradas (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        nome TEXT,
+        ato TEXT,
+        retirado_por TEXT,
+        data_retirada TEXT,
+        escrevente TEXT,
+        arquivo TEXT
+    )
+    """)
 
-        button{
-            width: 100%;
-            padding: 15px;
-            background: #2952d1;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            font-size: 18px;
-            cursor: pointer;
-        }
+    conn.commit()
+    conn.close()
 
-        button:hover{
-            background: #1d3ea3;
-        }
 
-    </style>
+criar_banco()
 
-</head>
 
-<body>
+# =========================
+# OCR PDF
+# =========================
 
-    <div class="container">
+def ler_pdf_ocr(caminho_pdf):
 
-        <h1>23º TABELIÃO - RETIRADAS</h1>
+    texto_total = ""
 
-        <form
-            action="/salvar"
-            method="POST"
-            enctype="multipart/form-data"
-        >
+    pdf = fitz.open(caminho_pdf)
 
-            <input
-                type="text"
-                name="nome"
-                placeholder="Destinatário"
-            >
+    for pagina in pdf:
 
-            <input
-                type="text"
-                name="ato"
-                placeholder="Tipo do ato"
-            >
+        pix = pagina.get_pixmap()
 
-            <input
-                type="text"
-                name="retirado_por"
-                placeholder="Retirado por"
-            >
+        imagem_path = "pagina_temp.png"
 
-            <input
-                type="text"
-                name="data_retirada"
-                placeholder="Data retirada"
-            >
+        pix.save(imagem_path)
 
-            <input
-                type="text"
-                name="escrevente"
-                placeholder="Escrevente"
-            >
+        imagem = Image.open(imagem_path)
 
-            <input
-                type="file"
-                name="arquivo"
-            >
+        texto = pytesseract.image_to_string(imagem)
 
-            <button type="submit">
-                Salvar Retirada
-            </button>
+        texto_total += texto + "\n"
 
-        </form>
+    return texto_total
 
-    </div>
 
-</body>
+# =========================
+# EXTRAIR DADOS
+# =========================
 
-</html>
+def extrair_dados(texto):
+
+    linhas = texto.split("\n")
+
+    nome = ""
+    ato = ""
+
+    for linha in linhas:
+
+        linha = linha.strip()
+
+        if len(linha) > 5 and nome == "":
+            nome = linha.upper()
+
+        if "ESCRITURA" in linha.upper():
+            ato = linha
+
+        elif "PROCURAÇÃO" in linha.upper():
+            ato = linha
+
+        elif "ATA" in linha.upper():
+            ato = linha
+
+        elif "RECONHECIMENTO" in linha.upper():
+            ato = linha
+
+    return nome, ato
+
+
+# =========================
+# HOME
+# =========================
+
+@app.route("/")
+def index():
+    return render_template("index.html")
+
+
+# =========================
+# SALVAR
+# =========================
+
+@app.route("/salvar", methods=["POST"])
+def salvar():
+
+    nome = request.form.get("nome", "").strip()
+    ato = request.form.get("ato", "").strip()
+    retirado_por = request.form.get("retirado_por", "").strip()
+    data_retirada = request.form.get("data_retirada", "").strip()
+    escrevente = request.form.get("escrevente", "").strip()
+
+    arquivo = request.files.get("arquivo")
+
+    nome_arquivo = ""
+
+    if arquivo and arquivo.filename != "":
+
+        nome_arquivo = secure_filename(arquivo.filename)
+
+        caminho = os.path.join(
+            UPLOAD_FOLDER,
+            nome_arquivo
+        )
+
+        arquivo.save(caminho)
+
+        try:
+
+            texto_ocr = ler_pdf_ocr(caminho)
+
+            print("OCR:")
+            print(texto_ocr)
+
+            nome_extraido, ato_extraido = extrair_dados(texto_ocr)
+
+            if nome == "":
+                nome = nome_extraido
+
+            if ato == "":
+                ato = ato_extraido
+
+        except Exception as erro:
+            print("ERRO OCR:", erro)
+
+    print("SALVANDO:")
+    print(nome)
+
+    conn = sqlite3.connect(DB)
+    cursor = conn.cursor()
+
+    cursor.execute("""
+    INSERT INTO retiradas
+    (
+        nome,
+        ato,
+        retirado_por,
+        data_retirada,
+        escrevente,
+        arquivo
+    )
+    VALUES (?, ?, ?, ?, ?, ?)
+    """, (
+        nome,
+        ato,
+        retirado_por,
+        data_retirada,
+        escrevente,
+        nome_arquivo
+    ))
+
+    conn.commit()
+    conn.close()
+
+    return redirect("/pesquisa")
+
+
+# =========================
+# PESQUISA
+# =========================
+
+@app.route("/pesquisa")
+def pesquisa():
+
+    termo = request.args.get("termo", "")
+
+    conn = sqlite3.connect(DB)
+    cursor = conn.cursor()
+
+    if termo:
+
+        cursor.execute("""
+        SELECT * FROM retiradas
+        WHERE nome LIKE ?
+        ORDER BY id DESC
+        """, ('%' + termo + '%',))
+
+    else:
+
+        cursor.execute("""
+        SELECT * FROM retiradas
+        ORDER BY id DESC
+        """)
+
+    dados = cursor.fetchall()
+
+    conn.close()
+
+    return render_template(
+        "pesquisa.html",
+        dados=dados,
+        termo=termo
+    )
+
+
+# =========================
+# DOWNLOAD PDF
+# =========================
+
+@app.route("/uploads/<arquivo>")
+def uploads(arquivo):
+
+    return send_from_directory(
+        UPLOAD_FOLDER,
+        arquivo
+    )
+
+
+# =========================
+# START
+# =========================
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=10000)
