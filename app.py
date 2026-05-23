@@ -5,10 +5,10 @@ from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
 
-UPLOAD_FOLDER = "uploads"
+UPLOAD_FOLDER = "/var/data/uploads"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-DB = "banco.db"
+DB = "/var/data/banco.db"
 
 
 # =========================
